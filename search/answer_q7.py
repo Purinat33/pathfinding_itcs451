@@ -1,6 +1,7 @@
+from typing import Literal, List, Tuple, TypeAlias, Annotated
+
 import numpy as np
-import heapq
-from typing import List, Tuple, TypeAlias, Annotated, Literal
+import queue
 
 State: TypeAlias = Tuple[int, int, str]
 
@@ -27,47 +28,59 @@ def state_func(grid: np.ndarray) -> State:
     - y (int)
     - facing ('N', 'E', 'S', or 'W')
     """
-    for x in range(len(grid)):
-        for y in range(len(grid[x])):
-            if grid[x][y] in [20, 21, 22]:
-                return x, y, 'N'
-            elif grid[x][y] in [30, 31, 32]:
-                return x, y, 'E'
-            elif grid[x][y] in [40, 41, 42]:
-                return x, y, 'S'
-            elif grid[x][y] in [50, 51, 52]:
-                return x, y, 'W'
-    return None
+    x, y = np.where(grid >= 20)
+    if len(x) > 0 and len(y) > 0:
+        x, y = x[0], y[0]
+        if grid[x][y] == 20:
+            facing = 'N'
+        elif grid[x][y] == 30:
+            facing = 'E'
+        elif grid[x][y] == 40:
+            facing = 'S'
+        elif grid[x][y] == 50:
+            facing = 'W'
+        return x, y, facing
+    else:
+        return None, None, None
 
 ACTIONS: List[str] = ['Turn left', 'Turn right', 'Move forward']
 
 def transition(state: State, action: str, grid: np.ndarray) -> State:
     """Return a new state."""
     x, y, facing = state
-    orientation = {'N': 0, 'E': 1, 'S': 2, 'W': 3}
-    
+    new_facing = facing
     if action == 'Turn left':
-        new_facing = ['N', 'E', 'S', 'W'][(orientation[facing] - 1) % 4]
-        return x, y, new_facing
-
-    if action == 'Turn right':
-        new_facing = ['N', 'E', 'S', 'W'][(orientation[facing] + 1) % 4]
-        return x, y, new_facing
-
-    if action == 'Move forward':
         if facing == 'N':
-            new_x, new_y = x, y - 1
+            new_facing = 'W'
         elif facing == 'E':
-            new_x, new_y = x + 1, y
+            new_facing = 'N'
         elif facing == 'S':
-            new_x, new_y = x, y + 1
-        else:  # facing == 'W'
-            new_x, new_y = x - 1, y
-
-        if grid[new_x][new_y] not in [1]:  # Can't move through walls
-            return new_x, new_y, facing
-
-    return x, y, facing  # If action is not recognized, stay in the same state
+            new_facing = 'E'
+        elif facing == 'W':
+            new_facing = 'S'
+    elif action == 'Turn right':
+        if facing == 'N':
+            new_facing = 'E'
+        elif facing == 'E':
+            new_facing = 'S'
+        elif facing == 'S':
+            new_facing = 'W'
+        elif facing == 'W':
+            new_facing = 'N'
+    elif action == 'Move forward':
+        if facing == 'N':
+            if x > 0 and grid[x - 1][y] != 1:
+                x -= 1
+        elif facing == 'E':
+            if y < grid.shape[1] - 1 and grid[x][y + 1] != 1:
+                y += 1
+        elif facing == 'S':
+            if x < grid.shape[0] - 1 and grid[x + 1][y] != 1:
+                x += 1
+        elif facing == 'W':
+            if y > 0 and grid[x][y - 1] != 1:
+                y -= 1
+    return x, y, new_facing
 
 def is_goal(state: State, grid: np.ndarray) -> bool:
     """Return whether the state is a goal state."""
@@ -77,12 +90,15 @@ def is_goal(state: State, grid: np.ndarray) -> bool:
 def cost(state: State, action: str, grid: np.ndarray) -> float:
     """Return a cost of an action on the state."""
     x, y, _ = state
-    if grid[x][y] == 7:
-        return 1.5  # Cost of moving through mud
-    elif grid[x][y] == 8:
-        return 1.2  # Cost of moving through grass
-    else:
-        return 1.0  # Default cost
+    if action == 'Move forward':
+        cell_value = grid[x][y]
+        if cell_value == 0:
+            return 1.0
+        elif cell_value == 7:
+            return 2.0
+        elif cell_value == 8:
+            return 3.0
+    return 0.0
 
 #===============================================================================
 # 7.2 SEARCH
@@ -94,213 +110,6 @@ def heuristic(state: State, goal_state: State) -> float:
     x2, y2, _ = goal_state
     return abs(x1 - x2) + abs(y1 - y2)
 
-# def graph_search(
-#         grid: np.ndarray,
-#         strategy: Literal['DFS', 'BFS', 'UCS', 'GS', 'A*'] = 'A*'
-#         ) -> Tuple[
-#             Annotated[List[str], 'actions of the plan'],
-#             Annotated[List[State], 'states of the plan'],
-#             Annotated[List[State], 'explored states']]:
-#     """Return a plan (actions and states) and a list of explored states (in order)."""
-
-#     start_state = state_func(grid)
-#     goal_state = (len(grid) - 2, len(grid) - 2, 'E')  # Goal is always at the bottom-right corner facing East
-
-#     explored_states = []
-#     plan_states = []
-#     plan_actions = []
-
-#     # Priority queue for A* using heapq
-#     open_list = [(0, start_state)]  # (f-cost, state)
-#     came_from = {}  # Dictionary to store the parent state for each state
-#     g_costs = {start_state: 0}  # Dictionary to store g-cost for each state
-
-#     while open_list:
-#         _, current_state = heapq.heappop(open_list)  # Get the state with the lowest f-cost
-#         explored_states.append(current_state)
-
-#         if current_state == goal_state:
-#             # Reconstruct the path
-#             while current_state in came_from:
-#                 plan_states.insert(0, current_state)
-#                 current_state = came_from[current_state]
-#             break
-
-#         for action in ACTIONS:
-#             new_state = transition(current_state, action, grid)
-#             if new_state:
-#                 tentative_g = g_costs[current_state] + cost(current_state, action, grid)
-
-#                 if new_state not in g_costs or tentative_g < g_costs[new_state]:
-#                     g_costs[new_state] = tentative_g
-#                     f_cost = tentative_g + heuristic(new_state, goal_state)
-#                     heapq.heappush(open_list, (f_cost, new_state))
-#                     came_from[new_state] = current_state
-
-#     # Extract plan actions from plan states
-#     for i in range(len(plan_states) - 1):
-#         current_state = plan_states[i]
-#         next_state = plan_states[i + 1]
-#         dx = next_state[0] - current_state[0]
-#         dy = next_state[1] - current_state[1]
-
-#         if dx == 1:
-#             plan_actions.append('Move forward')
-#         elif dx == -1:
-#             plan_actions.append('Turn right')
-#             plan_actions.append('Move forward')
-#         elif dy == 1:
-#             plan_actions.append('Turn left')
-#             plan_actions.append('Move forward')
-#         elif dy == -1:
-#             plan_actions.append('Turn right')
-#             plan_actions.append('Turn right')
-#             plan_actions.append('Move forward')
-
-#     return plan_actions, plan_states, explored_states
-
-def dfs(grid, start_state, goal_state):
-    stack = [start_state]
-    came_from = {}
-    explored_states = []
-
-    while stack:
-        current_state = stack.pop()
-        explored_states.append(current_state)
-
-        if current_state == goal_state:
-            # Reconstruct the path
-            plan_states = []
-            plan_actions = []
-            while current_state in came_from:
-                plan_states.insert(0, current_state)
-                current_state = came_from[current_state]
-            return plan_actions, plan_states, explored_states
-
-        for action in ACTIONS:
-            new_state = transition(current_state, action, grid)
-            if new_state and new_state not in came_from:
-                came_from[new_state] = current_state
-                stack.append(new_state)
-
-    return [], [], explored_states
-
-def bfs(grid, start_state, goal_state):
-    queue = [start_state]
-    came_from = {}
-    explored_states = []
-
-    while queue:
-        current_state = queue.pop(0)
-        explored_states.append(current_state)
-
-        if current_state == goal_state:
-            # Reconstruct the path
-            plan_states = []
-            plan_actions = []
-            while current_state in came_from:
-                plan_states.insert(0, current_state)
-                current_state = came_from[current_state]
-            return plan_actions, plan_states, explored_states
-
-        for action in ACTIONS:
-            new_state = transition(current_state, action, grid)
-            if new_state and new_state not in came_from:
-                came_from[new_state] = current_state
-                queue.append(new_state)
-
-    return [], [], explored_states
-
-def ucs(grid, start_state, goal_state):
-    priority_queue = [(0, start_state)]  # (g-cost, state)
-    came_from = {}
-    g_costs = {start_state: 0}
-    explored_states = []
-
-    while priority_queue:
-        _, current_state = heapq.heappop(priority_queue)
-        explored_states.append(current_state)
-
-        if current_state == goal_state:
-            # Reconstruct the path
-            plan_states = []
-            plan_actions = []
-            while current_state in came_from:
-                plan_states.insert(0, current_state)
-                current_state = came_from[current_state]
-            return plan_actions, plan_states, explored_states
-
-        for action in ACTIONS:
-            new_state = transition(current_state, action, grid)
-            if new_state:
-                tentative_g = g_costs[current_state] + cost(current_state, action, grid)
-
-                if new_state not in g_costs or tentative_g < g_costs[new_state]:
-                    g_costs[new_state] = tentative_g
-                    heapq.heappush(priority_queue, (tentative_g, new_state))
-                    came_from[new_state] = current_state
-
-    return [], [], explored_states
-
-def gs(grid, start_state, goal_state):
-    priority_queue = [(0, start_state)]  # (heuristic, state)
-    came_from = {}
-    explored_states = []
-
-    while priority_queue:
-        _, current_state = heapq.heappop(priority_queue)
-        explored_states.append(current_state)
-
-        if current_state == goal_state:
-            # Reconstruct the path
-            plan_states = []
-            plan_actions = []
-            while current_state in came_from:
-                plan_states.insert(0, current_state)
-                current_state = came_from[current_state]
-            return plan_actions, plan_states, explored_states
-
-        for action in ACTIONS:
-            new_state = transition(current_state, action, grid)
-            if new_state:
-                heuristic_value = heuristic(new_state, goal_state)
-                heapq.heappush(priority_queue, (heuristic_value, new_state))
-                came_from[new_state] = current_state
-
-    return [], [], explored_states
-
-def a_star(grid, start_state, goal_state):
-    priority_queue = [(0, start_state)]  # (f-cost, state)
-    came_from = {}
-    g_costs = {start_state: 0}
-    explored_states = []
-
-    while priority_queue:
-        _, current_state = heapq.heappop(priority_queue)
-        explored_states.append(current_state)
-
-        if current_state == goal_state:
-            # Reconstruct the path
-            plan_states = []
-            plan_actions = []
-            while current_state in came_from:
-                plan_states.insert(0, current_state)
-                current_state = came_from[current_state]
-            return plan_actions, plan_states, explored_states
-
-        for action in ACTIONS:
-            new_state = transition(current_state, action, grid)
-            if new_state:
-                tentative_g = g_costs[current_state] + cost(current_state, action, grid)
-
-                if new_state not in g_costs or tentative_g < g_costs[new_state]:
-                    g_costs[new_state] = tentative_g
-                    f_cost = tentative_g + heuristic(new_state, goal_state)
-                    heapq.heappush(priority_queue, (f_cost, new_state))
-                    came_from[new_state] = current_state
-
-    return [], [], explored_states
-
 def graph_search(
         grid: np.ndarray,
         strategy: Literal['DFS', 'BFS', 'UCS', 'GS', 'A*'] = 'A*'
@@ -310,24 +119,72 @@ def graph_search(
             Annotated[List[State], 'explored states']]:
     """Return a plan (actions and states) and a list of explored states (in order)."""
 
+    def reconstruct_path(came_from, current):
+        path = []
+        while current in came_from:
+            action, current = came_from[current]
+            path.append(action)
+        path.reverse()
+        return path
+
     start_state = state_func(grid)
-    goal_state = (len(grid) - 2, len(grid) - 2, 'E')  # Goal is always at the bottom-right corner facing East
+    goal_state = (grid.shape[0] - 2, grid.shape[1] - 2, 'S')
 
     if strategy == 'DFS':
-        return dfs(grid, start_state, goal_state)
+        frontier = [start_state]
     elif strategy == 'BFS':
-        return bfs(grid, start_state, goal_state)
+        frontier = queue.Queue()
+        frontier.put(start_state)
     elif strategy == 'UCS':
-        return ucs(grid, start_state, goal_state)
+        frontier = queue.PriorityQueue()
+        frontier.put((0, start_state))
+        cost_so_far = {start_state: 0}
     elif strategy == 'GS':
-        return gs(grid, start_state, goal_state)
+        frontier = queue.PriorityQueue()
+        frontier.put((heuristic(start_state, goal_state), start_state))
     elif strategy == 'A*':
-        return a_star(grid, start_state, goal_state)
-    else:
-        raise ValueError("Invalid strategy")
+        frontier = queue.PriorityQueue()
+        frontier.put((0 + heuristic(start_state, goal_state), start_state))
+        cost_so_far = {start_state: 0}
 
-# Example usage:
-# plan_actions, plan_states, explored_states = graph_search(grid, strategy='DFS')
-# or
-# plan_actions, plan_states, explored_states = graph_search(grid, strategy='BFS')
-# ... and so on for other strategies
+    came_from = {}
+    explored_states = []
+
+    while not frontier.empty():
+        if strategy == 'DFS':
+            current = frontier.pop()
+        elif strategy == 'BFS':
+            current = frontier.get()
+        elif strategy == 'UCS' or strategy == 'GS' or strategy == 'A*':
+            _, current = frontier.get()
+
+        if current == goal_state:
+            plan_actions = reconstruct_path(came_from, goal_state)
+            plan_states = [start_state]
+            for action in plan_actions:
+                next_state = transition(plan_states[-1], action, grid)
+                plan_states.append(next_state)
+            return plan_actions, plan_states, explored_states
+
+        explored_states.append(current)
+
+        for action in ACTIONS:
+            next_state = transition(current, action, grid)
+
+            if next_state is None:
+                continue
+
+            new_cost = cost_so_far[current] + cost(next_state, action, grid)
+
+            if strategy == 'UCS' or strategy == 'A*':
+                if next_state not in cost_so_far or new_cost < cost_so_far[next_state]:
+                    cost_so_far[next_state] = new_cost
+                    priority = new_cost + heuristic(next_state, goal_state)
+                    frontier.put((priority, next_state))
+                    came_from[next_state] = (action, current)
+            else:
+                if next_state not in came_from and next_state not in explored_states:
+                    frontier.append(next_state)
+                    came_from[next_state] = (action, current)
+
+    return [], [], []
