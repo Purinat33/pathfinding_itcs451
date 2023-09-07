@@ -2,6 +2,7 @@ from typing import Literal, List, Tuple, TypeAlias, Annotated
 
 import numpy as np
 import queue
+from collections import deque
 
 State: TypeAlias = Tuple[int, int, str]
 
@@ -110,6 +111,7 @@ def heuristic(state: State, goal_state: State) -> float:
     x2, y2, _ = goal_state
     return abs(x1 - x2) + abs(y1 - y2)
 
+
 def graph_search(
         grid: np.ndarray,
         strategy: Literal['DFS', 'BFS', 'UCS', 'GS', 'A*'] = 'A*'
@@ -131,7 +133,7 @@ def graph_search(
     goal_state = (grid.shape[0] - 2, grid.shape[1] - 2, 'S')
 
     if strategy == 'DFS':
-        frontier = [start_state]
+        frontier = deque([start_state])
     elif strategy == 'BFS':
         frontier = queue.Queue()
         frontier.put(start_state)
@@ -150,7 +152,7 @@ def graph_search(
     came_from = {}
     explored_states = []
 
-    while not frontier.empty():
+    while frontier:
         if strategy == 'DFS':
             current = frontier.pop()
         elif strategy == 'BFS':
@@ -174,9 +176,8 @@ def graph_search(
             if next_state is None:
                 continue
 
-            new_cost = cost_so_far[current] + cost(next_state, action, grid)
-
             if strategy == 'UCS' or strategy == 'A*':
+                new_cost = cost_so_far[current] + cost(next_state, action, grid)
                 if next_state not in cost_so_far or new_cost < cost_so_far[next_state]:
                     cost_so_far[next_state] = new_cost
                     priority = new_cost + heuristic(next_state, goal_state)
