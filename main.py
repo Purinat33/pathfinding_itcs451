@@ -19,7 +19,7 @@ pygame.display.set_caption('Pathfinding')
 env.render_maze_game(grid, screen, CELL_SIZE)
 
 # Start the search
-plan_actions, plan_states, explored_states = answer_q7.graph_search(grid, 'A*')
+plan_actions, plan_states, explored_states = answer_q7.graph_search(grid, 'GS')
 
 # Visualization
 overlay = np.zeros_like(grid)

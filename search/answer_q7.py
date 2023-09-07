@@ -112,8 +112,6 @@ def heuristic(state: State, goal_state: State) -> float:
     return abs(x1 - x2) + abs(y1 - y2)
 
 
-# ... (previous code remains the same)
-
 def graph_search(
         grid: np.ndarray,
         strategy: Literal['DFS', 'BFS', 'UCS', 'GS', 'A*'] = 'A*'
@@ -160,7 +158,7 @@ def graph_search(
         elif strategy == 'BFS':
             current = frontier.get()
         elif strategy == 'UCS' or strategy == 'GS' or strategy == 'A*':
-            _, current = frontier.get()
+            current = frontier.get()
 
         if current == goal_state:
             plan_actions = reconstruct_path(came_from, goal_state)
@@ -182,13 +180,12 @@ def graph_search(
                 new_cost = cost_so_far[current] + cost(next_state, action, grid)
                 if next_state not in cost_so_far or new_cost < cost_so_far[next_state]:
                     cost_so_far[next_state] = new_cost
-                    priority = heuristic(next_state, goal_state)  # Change this line
-                    frontier.put((priority, next_state))  # Change this line
+                    priority = new_cost + heuristic(next_state, goal_state)
+                    frontier.put((priority, next_state))
                     came_from[next_state] = (action, current)
             else:
                 if next_state not in came_from and next_state not in explored_states:
-                    priority = heuristic(next_state, goal_state)  # Change this line
-                    frontier.put((priority, next_state))  # Change this line
+                    frontier.put(next_state)
                     came_from[next_state] = (action, current)
 
     return [], [], []
